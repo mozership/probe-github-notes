@@ -223,11 +223,11 @@ func (p page) chunks() []string {
 	for i, n := range p.notes {
 		var b strings.Builder
 		if jk := n.jobID + "\x00" + n.job; i == 0 || jk != job {
-			fmt.Fprintf(&b, "\n### %s\n", orDash(n.job))
+			fmt.Fprintf(&b, "\n### %s\n", escapeMasks(orDash(n.job)))
 			job, step = jk, ""
 		}
 		if key := fmt.Sprintf("%d\x00%s\x00%d", n.index, n.step, n.run); step == "" || key != step {
-			fmt.Fprintf(&b, "\n**%s** · %s\n", orDash(n.step), stepState(n))
+			fmt.Fprintf(&b, "\n**%s** · %s\n", escapeMasks(orDash(n.step)), stepState(n))
 			step = key
 		}
 		b.WriteString("\n" + alert(n))
@@ -330,12 +330,19 @@ func escapeMasks(s string) string {
 }
 
 // escapeOutsideSpans escapes the masks of line outside its code spans. A
-// code span opens with a run of backticks and closes with the next run of
-// the same length; a run with no such closer is text.
+// code span opens with a run of backticks that is not escaped by a
+// backslash, and closes with the next run of the same length; a run with no
+// such closer is text.
 func escapeOutsideSpans(line string) string {
 	var b strings.Builder
 	text := 0
 	for i := 0; i < len(line); {
+		if line[i] == '\\' {
+			// A backslash makes the character after it text, so an escaped
+			// backtick opens no code span.
+			i += 2
+			continue
+		}
 		if line[i] != '`' {
 			i++
 			continue

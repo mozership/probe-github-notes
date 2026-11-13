@@ -75,6 +75,13 @@ The action keeps one comment, or one open issue, for each `key`, by a marker in 
       notes: "{{ filter(notes, .level == 'critical') }}"
 ```
 
+Two runs that post to the same place at once can both find no comment and both add one, and a later run edits only the first. The action cannot keep separate runs apart, so keep the runs of a workflow from overlapping, as with the [`concurrency`](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) of GitHub Actions:
+
+```yaml fragment
+concurrency:
+  group: probe-notes-${{ github.event.pull_request.number || github.ref }}
+```
+
 ## Parameters
 
 | Parameter | Type | Required | Default | Description |

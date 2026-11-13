@@ -211,6 +211,9 @@ func TestEscapeMasks(t *testing.T) {
 		{"````\n```\n<redacted>\n````\n<redacted>", "````\n```\n<redacted>\n````\n&lt;redacted&gt;"},
 		{"```\n<redacted>\n``` not a closer\n<redacted>\n```\n<redacted>", "```\n<redacted>\n``` not a closer\n<redacted>\n```\n&lt;redacted&gt;"},
 		{"``` a`b\n<redacted>", "``` a`b\n&lt;redacted&gt;"},
+		{"\\` <redacted> `", "\\` &lt;redacted&gt; `"},
+		// The escaped backtick is text, and the one after it opens a span.
+		{"\\`` <redacted> `", "\\`` <redacted> `"},
 	} {
 		if got := escapeMasks(tc.in); got != tc.want {
 			t.Errorf("escapeMasks(%q) = %q, want %q", tc.in, got, tc.want)
@@ -218,12 +221,13 @@ func TestEscapeMasks(t *testing.T) {
 	}
 }
 
-func TestRenderEscapesMasksInTitles(t *testing.T) {
-	notes, err := parseNotes([]any{entry("J", "S", "passed", "info", "Token <secret:TOKEN>", "b")})
+func TestRenderEscapesMasksInNames(t *testing.T) {
+	notes, err := parseNotes([]any{entry("Job <secret:HOST>", "Log in as <redacted>", "passed", "info", "Token <secret:TOKEN>", "b")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := mustRender(t, page{notes: notes}); !strings.Contains(got, "> **Token &lt;secret:TOKEN&gt;**") {
+	if got := mustRender(t, page{notes: notes}); !strings.Contains(got, "> **Token &lt;secret:TOKEN&gt;**") ||
+		!strings.Contains(got, "### Job &lt;secret:HOST&gt;") || !strings.Contains(got, "**Log in as &lt;redacted&gt;**") {
 		t.Errorf("render() =\n%s", got)
 	}
 }
