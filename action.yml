@@ -2,8 +2,11 @@ name: github-notes
 description: Put the notes of a run on GitHub, in a pull request comment, the job summary or an issue
 guard: [read-only, allow-host]
 params: [to, notes, body, token, repository, number, title, labels, key, api_url, timeout]
-# The release workflow puts the tag of each release here, and its digests
-# under checksums; v0.0.0 stands for the tag until the first.
 runs:
   using: binary
-  url: https://github.com/mozership/probe-github-notes/releases/download/v0.0.0/probe-github-notes_{os}_{arch}
+  url: https://github.com/mozership/probe-github-notes/releases/download/v0.1.0/probe-github-notes_{os}_{arch}
+  checksums:
+    darwin_amd64: "c558b334d27d96d0fc0e6e6a68962c4df5f71cc65175620859d54d9ed916bd25"
+    darwin_arm64: "c1c04644deea95ffed868ad8ec60802c97d1d55a6769ae0b9df77e34066412ec"
+    linux_amd64: "e272d58a190bac087683099f34f474f15cc216f1ff4328ec94ba9458489289c7"
+    linux_arm64: "c15343675216a2f5f7393f350c289b4812c8e003f6c0fadc372e5f0566f30855"
