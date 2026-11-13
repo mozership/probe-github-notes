@@ -6,7 +6,7 @@
 #   go run ./e2e/server &
 #   go build -o e2e/action/probe-github-notes . && probe e2e/workflow.yml
 #
-# The notes context needs a Probe that has it. The server keeps what it is
+# The notes context needs Probe v1.32.0 or later. The server keeps what it is
 # sent in memory, so the first run against it creates and later ones update.
 name: probe-github-notes against a stand-in for GitHub
 

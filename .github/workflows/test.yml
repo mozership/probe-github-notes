@@ -38,10 +38,14 @@ jobs:
         run: |
           go build -o e2e/server/server ./e2e/server
           e2e/server/server > "$RUNNER_TEMP/server.txt" 2>&1 &
-      # The notes context is in no release of Probe yet, so the probe the
-      # e2e workflows run is built from the commit that has it.
+      # The probe the e2e workflows run, the first with the notes context.
+      # The action checks it against the digest of its release and adds it
+      # to PATH.
       - name: Install Probe
-        run: go install github.com/mozership/probe/cmd/probe@498ac781e3a0bd65ca62f7bec17146bc063146b6
+        uses: mozership/probe-action@831b8b6c6aa0c8a61aa75b58f36a08da5c579e83 # v1.3.0
+        with:
+          install-only: true
+          version: v1.32.0
       - run: probe check e2e/workflow.yml
       # GITHUB_STEP_SUMMARY names a file of each step, so the summary the
       # workflow writes is read in the step that runs it.

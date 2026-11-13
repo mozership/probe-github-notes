@@ -4,7 +4,7 @@ A [Probe](https://github.com/mozership/probe) action that puts the notes of a ru
 
 Actions such as [probe-agent](https://github.com/mozership/probe-agent) leave notes for people, besides whether their step passed, and a later step reads them as [`notes`](https://probe.linyo.ws/reference/yaml-configuration#notes), with the job and the step of each and the secrets hidden. Probe does not post them anywhere. This action does, at the time and with the notes the workflow chooses, and nothing else: it is not an action for GitHub at large.
 
-It needs a Probe with the `notes` context, which is in no release yet.
+It needs Probe v1.32.0 or later, the first with the `notes` context.
 
 ```yaml
 name: Shop
