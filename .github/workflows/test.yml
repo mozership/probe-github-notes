@@ -43,9 +43,11 @@ jobs:
       - name: Install Probe
         run: go install github.com/mozership/probe/cmd/probe@498ac781e3a0bd65ca62f7bec17146bc063146b6
       - run: probe check e2e/workflow.yml
-      - run: probe e2e/workflow.yml
-      - name: The summary of this job holds the notes
+      # GITHUB_STEP_SUMMARY names a file of each step, so the summary the
+      # workflow writes is read in the step that runs it.
+      - name: Run the e2e workflow, which writes the summary of this step
         run: |
+          probe e2e/workflow.yml
           cat "$GITHUB_STEP_SUMMARY"
           grep -F '## Notes of the e2e run' "$GITHUB_STEP_SUMMARY"
           grep -F 'the password &lt;secret:SHOP_PASSWORD&gt;' "$GITHUB_STEP_SUMMARY"
