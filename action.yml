@@ -1,0 +1,7 @@
+name: github-notes
+description: Put the notes of a run on GitHub, in a pull request comment, the job summary or an issue
+guard: [read-only, allow-host]
+params: [to, notes, body, token, repository, number, title, labels, key, api_url, timeout]
+runs:
+  using: binary
+  path: probe-github-notes

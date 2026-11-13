@@ -1,0 +1,72 @@
+name: Test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  # The tests above call the action in the process. This one runs it
+  # through Probe: one job leaves notes, and another puts them on a
+  # stand-in for GitHub, in the summary of this job too.
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      SHOP_PASSWORD: hunter2-e2e
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version-file: go.mod
+      # Probe resolves the action before the first job of a workflow, so it
+      # is built first.
+      - run: go build -o e2e/action/probe-github-notes .
+      # The first step of the second job of e2e/workflow.yml waits for it
+      # to listen.
+      - name: Start the stand-in for GitHub
+        run: |
+          go build -o e2e/server/server ./e2e/server
+          e2e/server/server > "$RUNNER_TEMP/server.txt" 2>&1 &
+      # The notes context is in no release of Probe yet, so the probe the
+      # e2e workflows run is built from the commit that has it.
+      - name: Install Probe
+        run: go install github.com/mozership/probe/cmd/probe@498ac781e3a0bd65ca62f7bec17146bc063146b6
+      - run: probe check e2e/workflow.yml
+      - run: probe e2e/workflow.yml
+      - name: The summary of this job holds the notes
+        run: |
+          cat "$GITHUB_STEP_SUMMARY"
+          grep -F '## Notes of the e2e run' "$GITHUB_STEP_SUMMARY"
+          grep -F 'the password &lt;secret:SHOP_PASSWORD&gt;' "$GITHUB_STEP_SUMMARY"
+          ! grep -F "$SHOP_PASSWORD" "$GITHUB_STEP_SUMMARY"
+      # The comment of guard.yml is refused, which ends the run with exit
+      # status 2, and its summary is written.
+      - name: A comment is refused under --read-only
+        run: |
+          status=0
+          probe --read-only e2e/guard.yml > "$RUNNER_TEMP/read-only.txt" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/read-only.txt"
+          test "$status" -eq 2
+          grep -F 'refused: the run is read-only, and to: comment writes to GitHub' "$RUNNER_TEMP/read-only.txt"
+          grep -F '✓  The notes are put in the summary' "$RUNNER_TEMP/read-only.txt"
+      - name: A host the run does not allow is refused
+        run: |
+          status=0
+          probe --allow-host api.github.com e2e/guard.yml > "$RUNNER_TEMP/allow-host.txt" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/allow-host.txt"
+          test "$status" -eq 2
+          grep -F 'refused: the host 127.0.0.1:18082 is not one the run allows' "$RUNNER_TEMP/allow-host.txt"
+      - name: What the server logged
+        if: always()
+        run: cat "$RUNNER_TEMP/server.txt"
