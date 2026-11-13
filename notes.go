@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // Levels of a note, as Probe gives them in the notes context.
@@ -23,9 +24,21 @@ var alerts = map[string]string{
 	levelInfo:     "NOTE",
 }
 
-// maxBody is the most characters GitHub takes in the body of a comment or
-// an issue.
-const maxBody = 65536
+// limit is the most a page can hold where it is written, measured as
+// GitHub measures it there.
+type limit struct {
+	max  int
+	size func(string) int
+	// what names the unit in the line that says notes were left out.
+	what string
+}
+
+// bodyLimit is that of the body of a comment or an issue, 65536
+// characters, and summaryLimit that of the summary of a step, 1 MiB.
+var (
+	bodyLimit    = limit{max: 65536, size: utf8.RuneCountInString, what: "characters"}
+	summaryLimit = limit{max: 1 << 20, size: func(s string) int { return len(s) }, what: "bytes"}
+)
 
 // note is an entry of the notes context of Probe.
 type note struct {
@@ -136,49 +149,74 @@ type page struct {
 	footer string
 }
 
-// render writes the page as Markdown. When it is longer than GitHub takes,
-// the last notes are left out, and a line says how many.
-func (p page) render() string {
-	for shown := len(p.notes); ; shown-- {
-		s := p.renderWith(shown)
-		if len(s) <= maxBody || shown == 0 {
-			return s
-		}
-	}
-}
-
-func (p page) renderWith(shown int) string {
-	var b strings.Builder
+// render writes the page as Markdown within l. When the notes do not all
+// fit, the last are left out, and a line says how many. Each part is
+// written and measured once, so a long page costs no more than a short one.
+// It fails when the page does not fit even without its notes.
+func (p page) render(l limit) (string, error) {
+	var head strings.Builder
 	if p.marker != "" {
-		b.WriteString(p.marker + "\n")
+		head.WriteString(p.marker + "\n")
 	}
 	if body := strings.TrimSpace(p.body); body != "" {
-		b.WriteString(escapeMasks(body) + "\n\n")
+		head.WriteString(escapeMasks(body) + "\n\n")
 	}
-	b.WriteString(countLine(p.notes) + "\n")
+	head.WriteString(countLine(p.notes) + "\n")
+	var foot string
+	if p.footer != "" {
+		foot = "\n" + p.footer + "\n"
+	}
+	leftOut := func(n int) string {
+		if n == 0 {
+			return ""
+		}
+		return fmt.Sprintf("\n%s left out, as GitHub takes at most %d %s here. The run has them all.\n", plural(n, "more note is", "more notes are"), l.max, l.what)
+	}
 
+	chunks := p.chunks()
+	fixed := l.size(head.String()) + l.size(foot)
+	shown, used := 0, 0
+	for i, c := range chunks {
+		n := l.size(c)
+		rest := len(chunks) - i - 1
+		if fixed+used+n+l.size(leftOut(rest)) > l.max {
+			break
+		}
+		shown, used = i+1, used+n
+	}
+	if fixed+used+l.size(leftOut(len(chunks)-shown)) > l.max {
+		return "", fmt.Errorf("with.body is too long: the page is more than the %d %s GitHub takes here even without the notes", l.max, l.what)
+	}
+
+	var b strings.Builder
+	b.WriteString(head.String())
+	for _, c := range chunks[:shown] {
+		b.WriteString(c)
+	}
+	b.WriteString(leftOut(len(chunks) - shown))
+	b.WriteString(foot)
+	return b.String(), nil
+}
+
+// chunks writes each note, after the name of its job and of its step where
+// they change from those of the note before.
+func (p page) chunks() []string {
+	out := make([]string, 0, len(p.notes))
 	var job, step string
-	first := true
-	for _, n := range p.notes[:shown] {
-		if jk := n.jobID + "\x00" + n.job; first || jk != job {
+	for i, n := range p.notes {
+		var b strings.Builder
+		if jk := n.jobID + "\x00" + n.job; i == 0 || jk != job {
 			fmt.Fprintf(&b, "\n### %s\n", orDash(n.job))
 			job, step = jk, ""
 		}
-		key := fmt.Sprintf("%d\x00%s\x00%d", n.index, n.step, n.run)
-		if first || key != step {
+		if key := fmt.Sprintf("%d\x00%s\x00%d", n.index, n.step, n.run); step == "" || key != step {
 			fmt.Fprintf(&b, "\n**%s** · %s\n", orDash(n.step), stepState(n))
 			step = key
 		}
-		first = false
 		b.WriteString("\n" + alert(n))
+		out = append(out, b.String())
 	}
-	if left := len(p.notes) - shown; left > 0 {
-		fmt.Fprintf(&b, "\n%s left out, as GitHub takes at most %d characters here. The run has them all.\n", plural(left, "more note is", "more notes are"), maxBody)
-	}
-	if p.footer != "" {
-		b.WriteString("\n" + p.footer + "\n")
-	}
-	return b.String()
+	return out
 }
 
 // countLine says how many notes there are of each level.
@@ -243,8 +281,9 @@ func plural(n int, one, many string) string {
 // and <redacted>.
 var masks = regexp.MustCompile(`<(secret:[A-Za-z_][A-Za-z0-9_]*|redacted)>`)
 
-// fence opens or closes a fenced code block.
-var fence = regexp.MustCompile("^ {0,3}(```|~~~)")
+// fence opens or closes a fenced code block: three or more backticks or
+// tildes, indented by at most three spaces, and what follows them.
+var fence = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})(.*)$")
 
 // escapeMasks writes the masks in s as text, which GitHub would take for
 // HTML tags and leave out, so that a reader sees where a value was hidden.
@@ -252,16 +291,18 @@ var fence = regexp.MustCompile("^ {0,3}(```|~~~)")
 // alone there.
 func escapeMasks(s string) string {
 	lines := strings.Split(s, "\n")
+	// open is the fence of the code block the line is in, or empty.
 	var open string
 	for i, line := range lines {
 		if m := fence.FindStringSubmatch(line); m != nil {
 			switch {
-			case open == "":
+			case open == "" && !(m[1][0] == '`' && strings.Contains(m[2], "`")):
 				open = m[1]
-			case open == m[1]:
+				continue
+			case open != "" && m[1][0] == open[0] && len(m[1]) >= len(open) && strings.TrimSpace(m[2]) == "":
 				open = ""
+				continue
 			}
-			continue
 		}
 		if open != "" {
 			continue
@@ -271,28 +312,54 @@ func escapeMasks(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// escapeOutsideSpans escapes the masks of line outside its code spans.
+// escapeOutsideSpans escapes the masks of line outside its code spans. A
+// code span opens with a run of backticks and closes with the next run of
+// the same length; a run with no such closer is text.
 func escapeOutsideSpans(line string) string {
 	var b strings.Builder
-	for line != "" {
-		start := strings.IndexByte(line, '`')
-		if start < 0 {
-			b.WriteString(escape(line))
-			break
+	text := 0
+	for i := 0; i < len(line); {
+		if line[i] != '`' {
+			i++
+			continue
 		}
-		b.WriteString(escape(line[:start]))
-		run := len(line[start:]) - len(strings.TrimLeft(line[start:], "`"))
-		ticks := line[start : start+run]
-		end := strings.Index(line[start+run:], ticks)
+		n := ticks(line, i)
+		end := closer(line, i+n, n)
 		if end < 0 {
-			b.WriteString(escape(line[start:]))
-			break
+			i += n
+			continue
 		}
-		span := start + run + end + run
-		b.WriteString(line[start:span])
-		line = line[span:]
+		b.WriteString(escape(line[text:i]))
+		b.WriteString(line[i : end+n])
+		i, text = end+n, end+n
 	}
+	b.WriteString(escape(line[text:]))
 	return b.String()
+}
+
+// ticks is the length of the run of backticks at i.
+func ticks(s string, i int) int {
+	n := 0
+	for i+n < len(s) && s[i+n] == '`' {
+		n++
+	}
+	return n
+}
+
+// closer is where the first run of exactly n backticks from i starts, or -1.
+func closer(s string, i, n int) int {
+	for i < len(s) {
+		if s[i] != '`' {
+			i++
+			continue
+		}
+		run := ticks(s, i)
+		if run == n {
+			return i
+		}
+		i += run
+	}
+	return -1
 }
 
 func escape(s string) string {

@@ -304,38 +304,39 @@ func (a *Action) post(ctx context.Context, r *request, guard actionrpc.Guard) (r
 
 	c := &client{http: a.httpClient(guard), base: r.apiURL, token: r.token, guard: guard}
 	p.marker = fmt.Sprintf("<!-- probe-github-notes:%s -->", r.key)
-	var (
-		res result
-		err error
-	)
+	text, err := p.render(bodyLimit)
+	if err != nil {
+		return result{}, err
+	}
+	var res result
 	if r.to == toComment {
-		res, err = a.postComment(ctx, c, r, p)
+		res, err = a.postComment(ctx, c, r, p.marker, text)
 	} else {
-		res, err = a.postIssue(ctx, c, r, p)
+		res, err = a.postIssue(ctx, c, r, p.marker, text)
 	}
 	res.code = c.code
 	return res, err
 }
 
-func (a *Action) postComment(ctx context.Context, c *client, r *request, p page) (result, error) {
+func (a *Action) postComment(ctx context.Context, c *client, r *request, marker, text string) (result, error) {
 	if r.number == 0 {
 		a.log.Info("no pull request to comment on")
 		return result{action: didNone}, nil
 	}
 	res := result{action: didNone, number: r.number}
-	found, err := c.findComment(ctx, r.repository, r.number, p.marker)
+	found, err := c.findComment(ctx, r.repository, r.number, marker)
 	if err != nil {
 		return res, err
 	}
 	var cm *comment
 	switch {
 	case found != nil:
-		if cm, err = c.updateComment(ctx, r.repository, found.ID, p.render()); err != nil {
+		if cm, err = c.updateComment(ctx, r.repository, found.ID, text); err != nil {
 			return res, err
 		}
 		res.action = didUpdate
 	case len(r.notes) > 0:
-		if cm, err = c.createComment(ctx, r.repository, r.number, p.render()); err != nil {
+		if cm, err = c.createComment(ctx, r.repository, r.number, text); err != nil {
 			return res, err
 		}
 		res.action = didCreate
@@ -346,9 +347,9 @@ func (a *Action) postComment(ctx context.Context, c *client, r *request, p page)
 	return res, nil
 }
 
-func (a *Action) postIssue(ctx context.Context, c *client, r *request, p page) (result, error) {
+func (a *Action) postIssue(ctx context.Context, c *client, r *request, marker, text string) (result, error) {
 	res := result{action: didNone}
-	found, err := c.findIssue(ctx, r.repository, r.labels, p.marker)
+	found, err := c.findIssue(ctx, r.repository, r.labels, marker)
 	if err != nil {
 		return res, err
 	}
@@ -356,7 +357,7 @@ func (a *Action) postIssue(ctx context.Context, c *client, r *request, p page) (
 	switch {
 	case found != nil:
 		closing := len(r.notes) == 0
-		if is, err = c.updateIssue(ctx, r.repository, found.Number, r.title, p.render(), closing); err != nil {
+		if is, err = c.updateIssue(ctx, r.repository, found.Number, r.title, text, closing); err != nil {
 			return res, err
 		}
 		res.action = didUpdate
@@ -364,7 +365,7 @@ func (a *Action) postIssue(ctx context.Context, c *client, r *request, p page) (
 			res.action = didClose
 		}
 	case len(r.notes) > 0:
-		if is, err = c.createIssue(ctx, r.repository, r.title, p.render(), r.labels); err != nil {
+		if is, err = c.createIssue(ctx, r.repository, r.title, text, r.labels); err != nil {
 			return res, err
 		}
 		res.action = didCreate
@@ -385,11 +386,15 @@ func (a *Action) writeSummary(p page) (result, error) {
 	if len(p.notes) == 0 {
 		return result{action: didNone}, nil
 	}
+	text, err := p.render(summaryLimit)
+	if err != nil {
+		return result{}, err
+	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return result{}, fmt.Errorf("writing the summary: %w", err)
 	}
-	_, err = f.WriteString(p.render() + "\n")
+	_, err = f.WriteString(text + "\n")
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}

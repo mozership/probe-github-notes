@@ -81,7 +81,7 @@ func (c *client) findComment(ctx context.Context, repo string, number int, marke
 			return nil, nil
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("looked through %d pages of the comments of #%d without finding the comment of the action or the last page", maxPages, number)
 }
 
 func (c *client) createComment(ctx context.Context, repo string, number int, body string) (*comment, error) {
@@ -120,7 +120,7 @@ func (c *client) findIssue(ctx context.Context, repo string, labels []string, ma
 			return nil, nil
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("looked through %d pages of the open issues without finding the issue of the action or the last page; give the issues of the action labels of their own", maxPages)
 }
 
 func (c *client) createIssue(ctx context.Context, repo, title, body string, labels []string) (*issue, error) {

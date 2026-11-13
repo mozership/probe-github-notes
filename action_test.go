@@ -125,6 +125,22 @@ func TestCommentIsFoundOnALaterPage(t *testing.T) {
 	}
 }
 
+// TestSearchThatDoesNotEndFails checks that a step fails rather than add a
+// second comment when the action gives up on the pages before the last.
+func TestSearchThatDoesNotEndFails(t *testing.T) {
+	fake, ts, a := gh(t, nil)
+	fake.PerPage = 1
+	for range maxPages + 1 {
+		fake.AddComment(1, "a comment")
+	}
+	if _, err := a.Run(with(ts, toComment, someNotes(), nil)); err == nil || !strings.Contains(err.Error(), "looked through 30 pages") {
+		t.Errorf("error = %v, want one saying the search did not end", err)
+	}
+	if n := len(fake.Comments(1)); n != maxPages+1 {
+		t.Errorf("%d comments, want none added", n)
+	}
+}
+
 func TestCommentWithNoNotes(t *testing.T) {
 	fake, ts, a := gh(t, nil)
 

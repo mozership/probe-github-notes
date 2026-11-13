@@ -121,7 +121,7 @@ The run left 2 notes: 1 critical, 1 info.
 <sub>From [run 123456](https://github.com/owner/name/actions/runs/123456) of _Shop_.</sub>
 ```
 
-The last line links to the GitHub Actions run, and is left out outside one. A value Probe hides is `<secret:NAME>` or `<redacted>` in a note, which GitHub would take for an HTML tag and leave out, so the action writes it as text, except in code, where it shows as it is. GitHub takes at most 65536 characters in a comment or an issue, so the last notes of a longer page are left out, and a line says how many.
+The last line links to the GitHub Actions run, and is left out outside one. A value Probe hides is `<secret:NAME>` or `<redacted>` in a note, which GitHub would take for an HTML tag and leave out, so the action writes it as text, except in code, where it shows as it is. GitHub takes at most 65536 characters in a comment or an issue, and 1 MiB in the summary of a step, so the last notes of a longer page are left out, and a line says how many. A `body` too long to fit even without the notes fails the step.
 
 ## Result
 
