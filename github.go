@@ -63,7 +63,8 @@ func (e *apiError) Error() string {
 }
 
 // findComment returns the first comment on issue number of repo whose body
-// has marker, or nil.
+// starts with marker, as the action writes it, or nil. A comment that only
+// quotes the marker is someone else's.
 func (c *client) findComment(ctx context.Context, repo string, number int, marker string) (*comment, error) {
 	next := fmt.Sprintf("repos/%s/issues/%d/comments?per_page=100", repo, number)
 	for range maxPages {
@@ -73,7 +74,7 @@ func (c *client) findComment(ctx context.Context, repo string, number int, marke
 			return nil, err
 		}
 		for i := range page {
-			if strings.Contains(page[i].Body, marker) {
+			if strings.HasPrefix(page[i].Body, marker) {
 				return &page[i], nil
 			}
 		}
@@ -96,8 +97,8 @@ func (c *client) updateComment(ctx context.Context, repo string, id int64, body 
 	return &out, err
 }
 
-// findIssue returns the first open issue of repo with labels whose body has
-// marker, or nil. Pull requests, which the API lists among issues, are
+// findIssue returns the first open issue of repo with labels whose body
+// starts with marker, or nil. Pull requests, which the API lists among issues, are
 // passed over.
 func (c *client) findIssue(ctx context.Context, repo string, labels []string, marker string) (*issue, error) {
 	q := url.Values{"state": {"open"}, "per_page": {"100"}}
@@ -112,7 +113,7 @@ func (c *client) findIssue(ctx context.Context, repo string, labels []string, ma
 			return nil, err
 		}
 		for i := range page {
-			if page[i].PullRequest == nil && strings.Contains(page[i].Body, marker) {
+			if page[i].PullRequest == nil && strings.HasPrefix(page[i].Body, marker) {
 				return &page[i], nil
 			}
 		}

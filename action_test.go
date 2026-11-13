@@ -67,6 +67,7 @@ func res(t *testing.T, ret map[string]any) map[string]any {
 func TestCommentIsAddedThenEdited(t *testing.T) {
 	fake, ts, a := gh(t, nil)
 	fake.AddComment(1, "LGTM")
+	fake.AddComment(1, "Why does the comment start with <!-- probe-github-notes:probe -->?")
 
 	ret, err := a.Run(with(ts, toComment, someNotes(), nil))
 	if err != nil {
@@ -85,10 +86,10 @@ func TestCommentIsAddedThenEdited(t *testing.T) {
 	}
 
 	comments := fake.Comments(1)
-	if len(comments) != 2 {
-		t.Fatalf("comments = %v, want the one of someone else and one of the action", comments)
+	if len(comments) != 3 || !strings.HasPrefix(comments[1].Body, "Why") {
+		t.Fatalf("comments = %v, want the two of someone else, the one quoting the marker as it was, and one of the action", comments)
 	}
-	body := comments[1].Body
+	body := comments[2].Body
 	if !strings.HasPrefix(body, "<!-- probe-github-notes:probe -->\n") || !strings.Contains(body, "1 critical") || strings.Contains(body, "Checkout") {
 		t.Errorf("comment =\n%s\nwant the marker and the notes of the second run", body)
 	}

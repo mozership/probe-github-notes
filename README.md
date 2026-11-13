@@ -56,7 +56,7 @@ The workflow gives the action a name once, under `actions`, and its steps use th
 
 A comment is for a workflow run on a change, read by those who review it. The summary needs no token, and is for a run with no pull request to comment on, or notes not for the reviewers. An issue is for a workflow run on a schedule, as against a staging environment each night, whose notes are work to track: it stays open while the runs leave notes, and is closed by the first that leaves none.
 
-The action keeps one comment, or one open issue, for each `key`, by a marker in its body, `<!-- probe-github-notes:<key> -->`. It looks through the comments of the pull request, or the open issues with `labels`, for the first with the marker, and edits it; with none, it adds one. Two workflows, or two steps, keep comments of their own with keys of their own:
+The action keeps one comment, or one open issue, for each `key`, by a marker at the start of its body, `<!-- probe-github-notes:<key> -->`. It looks through the comments of the pull request, or the open issues with `labels`, for the first that starts with the marker, and edits it; with none, it adds one. Two workflows, or two steps, keep comments of their own with keys of their own:
 
 ```yaml fragment
   - name: Every note, in one comment
