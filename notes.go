@@ -31,6 +31,9 @@ type limit struct {
 	size func(string) int
 	// what names the unit in the line that says notes were left out.
 	what string
+	// taken is how much of max is taken already, as by what earlier steps
+	// wrote to the same summary.
+	taken int
 }
 
 // bodyLimit is that of the body of a comment or an issue, 65536
@@ -174,17 +177,31 @@ func (p page) render(l limit) (string, error) {
 	}
 
 	chunks := p.chunks()
-	fixed := l.size(head.String()) + l.size(foot)
-	shown, used := 0, 0
+	room := l.max - l.taken - l.size(head.String()) - l.size(foot)
+	sizes := make([]int, len(chunks))
+	total := 0
 	for i, c := range chunks {
-		n := l.size(c)
-		rest := len(chunks) - i - 1
-		if fixed+used+n+l.size(leftOut(rest)) > l.max {
-			break
-		}
-		shown, used = i+1, used+n
+		sizes[i] = l.size(c)
+		total += sizes[i]
 	}
-	if fixed+used+l.size(leftOut(len(chunks)-shown)) > l.max {
+	// Every note, with no line saying some are left out, or the longest
+	// run of them from the first that fits beside that line.
+	shown := len(chunks)
+	if total > room {
+		shown = -1
+		used := 0
+		for k := 0; k < len(chunks); k++ {
+			if used+l.size(leftOut(len(chunks)-k)) > room {
+				break
+			}
+			shown = k
+			used += sizes[k]
+		}
+	}
+	if shown < 0 {
+		if l.taken > 0 {
+			return "", fmt.Errorf("the page does not fit in what is left of the %d %s GitHub takes here, %d, even without the notes", l.max, l.what, l.max-l.taken)
+		}
 		return "", fmt.Errorf("with.body is too long: the page is more than the %d %s GitHub takes here even without the notes", l.max, l.what)
 	}
 

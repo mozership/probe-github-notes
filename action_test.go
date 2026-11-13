@@ -299,6 +299,31 @@ func TestKeysOfOtherKindsAreLeftAlone(t *testing.T) {
 	}
 }
 
+// TestSummaryKeepsToWhatIsLeft checks that the limit of the summary is that
+// of the whole file, of which earlier steps may have taken most.
+func TestSummaryKeepsToWhatIsLeft(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "summary.md")
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", summaryLimit.max-2000)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &Action{getenv: func(k string) string { return map[string]string{"GITHUB_STEP_SUMMARY": path}[k] }}
+	notes := []any{entry("J", "S", "passed", "info", "", strings.Repeat("a", 1500)), entry("J", "S", "passed", "info", "", strings.Repeat("b", 1500))}
+	if _, err := a.Run(map[string]any{"to": toSummary, "notes": notes}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if len(data) > summaryLimit.max || !strings.Contains(string(data), "1 more note is left out") {
+		t.Errorf("the summary is %d bytes, want at most %d with the second note left out", len(data), summaryLimit.max)
+	}
+
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", summaryLimit.max-10)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Run(map[string]any{"to": toSummary, "notes": notes}); err == nil || !strings.Contains(err.Error(), "does not fit in what is left") {
+		t.Errorf("error = %v, want one saying the page does not fit in what is left", err)
+	}
+}
+
 func TestSummaryOutsideGitHubActions(t *testing.T) {
 	a := &Action{getenv: func(string) string { return "" }}
 	ret, err := a.Run(map[string]any{"to": toSummary, "notes": someNotes()})
@@ -330,6 +355,27 @@ func TestAllowHost(t *testing.T) {
 	}
 	if _, _, err := a.RunStep(actionrpc.Call{With: with(ts, toComment, someNotes(), nil), Guard: actionrpc.Guard{AllowHosts: []string{u.Host}}}); err != nil {
 		t.Errorf("error = %v, want the host of api_url allowed", err)
+	}
+}
+
+// TestRedirectOfAWriteFails checks that a PATCH redirected by a 301 is not
+// sent again as a GET, which would read the comment as it was.
+func TestRedirectOfAWriteFails(t *testing.T) {
+	fake, ts, a := gh(t, nil)
+	if _, err := a.Run(with(ts, toComment, someNotes(), nil)); err != nil {
+		t.Fatal(err)
+	}
+	moved := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch {
+			http.Redirect(w, r, ts.URL+r.URL.Path, http.StatusMovedPermanently)
+			return
+		}
+		fake.ServeHTTP(w, r)
+	}))
+	t.Cleanup(moved.Close)
+	_, err := a.Run(with(moved, toComment, someNotes()[:1], nil))
+	if err == nil || !strings.Contains(err.Error(), "redirected a PATCH") {
+		t.Errorf("error = %v, want one saying the PATCH was redirected", err)
 	}
 }
 

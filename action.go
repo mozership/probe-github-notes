@@ -386,7 +386,14 @@ func (a *Action) writeSummary(p page) (result, error) {
 	if len(p.notes) == 0 {
 		return result{action: didNone}, nil
 	}
-	text, err := p.render(summaryLimit)
+	// The limit is that of the whole file, which earlier steps of the job
+	// may have written to, and the page is written with a newline after it.
+	l := summaryLimit
+	if info, err := os.Stat(path); err == nil {
+		l.taken = int(info.Size())
+	}
+	l.taken++
+	text, err := p.render(l)
 	if err != nil {
 		return result{}, err
 	}
@@ -430,6 +437,12 @@ func (a *Action) httpClient(guard actionrpc.Guard) *http.Client {
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
 			return errors.New("stopped after 10 redirects")
+		}
+		// net/http sends a POST or a PATCH again as a GET after a 301 or a
+		// 302, and the GET would answer with the comment or the issue as it
+		// was, as though it had been written.
+		if req.Method != via[0].Method {
+			return fmt.Errorf("GitHub redirected a %s to %s, which would be sent as a %s; give api_url as the API answers it", via[0].Method, req.URL, req.Method)
 		}
 		return checkHost(guard, req.URL)
 	}

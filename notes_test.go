@@ -117,6 +117,26 @@ func TestRenderLeavesOutWhatGitHubDoesNotTake(t *testing.T) {
 	}
 }
 
+// TestRenderKeepsEveryNoteThatFits checks that a page with every note is
+// kept when it fits, though the first note and the line saying the last
+// is left out would not.
+func TestRenderKeepsEveryNoteThatFits(t *testing.T) {
+	list := []any{entry("J", "S", "passed", "info", "", "a"), entry("J", "S", "passed", "info", "", "b")}
+	notes, err := parseNotes(list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	short := mustRender(t, page{notes: notes})
+	list[0].(map[string]any)["body"] = "a" + strings.Repeat("x", bodyLimit.max-utf8.RuneCountInString(short))
+	if notes, err = parseNotes(list); err != nil {
+		t.Fatal(err)
+	}
+	got := mustRender(t, page{notes: notes})
+	if n := utf8.RuneCountInString(got); n != bodyLimit.max || strings.Contains(got, "left out") {
+		t.Errorf("render() is %d characters, want both notes in exactly %d", n, bodyLimit.max)
+	}
+}
+
 // TestRenderCountsCharacters checks that the limit of a comment is in
 // characters, as GitHub counts it, not in bytes.
 func TestRenderCountsCharacters(t *testing.T) {
