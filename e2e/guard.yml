@@ -1,0 +1,31 @@
+# Run under --read-only, where to: comment is refused before any request
+# and to: summary writes, and under --allow-host without the host of the
+# stand-in, where to: comment is refused.
+name: probe-github-notes under a guard
+
+actions:
+  github-notes: ./action
+
+vars:
+  base: "{{FAKE_GITHUB_URL ?? 'http://127.0.0.1:18082'}}"
+
+jobs:
+- name: Under a guard
+  steps:
+  - name: The notes are put in a comment
+    uses: github-notes
+    with:
+      to: comment
+      token: e2e-token
+      repository: e2e/shop
+      number: 1
+      api_url: "{{vars.base}}"
+      notes: []
+    test: status == 0
+
+  - name: The notes are put in the summary
+    uses: github-notes
+    with:
+      to: summary
+      notes: []
+    test: status == 0

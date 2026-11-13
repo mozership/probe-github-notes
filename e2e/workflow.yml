@@ -1,0 +1,155 @@
+# The end-to-end tests: notes left by one job, put on GitHub by
+# probe-github-notes in another, against the stand-in for GitHub of
+# e2e/server. Run it from the repository root, with the server listening and
+# the action built first, as Probe resolves it before the first job:
+#
+#   go run ./e2e/server &
+#   go build -o e2e/action/probe-github-notes . && probe e2e/workflow.yml
+#
+# The notes context needs a Probe that has it. The server keeps what it is
+# sent in memory, so the first run against it creates and later ones update.
+name: probe-github-notes against a stand-in for GitHub
+
+# The action as it was just built, by the name a workflow would give a
+# released one.
+actions:
+  github-notes: ./action
+
+# SHOP_PASSWORD is set by the run: a secret is one of the environment.
+secrets:
+  - FAKE_GITHUB_TOKEN
+  - SHOP_PASSWORD
+
+vars:
+  base: "{{FAKE_GITHUB_URL ?? 'http://127.0.0.1:18082'}}"
+  token: "{{FAKE_GITHUB_TOKEN ?? 'e2e-token'}}"
+  # A secret the notes tell, which Probe hides in them.
+  password: "{{SHOP_PASSWORD ?? 'hunter2-e2e'}}"
+
+jobs:
+# The notes come from hello, which returns what it is given in with as res,
+# as an action that leaves notes would return them.
+- name: Agent
+  id: agent
+  steps:
+  - name: A new user signs up
+    uses: hello
+    with:
+      notes:
+      - level: critical
+        title: The form takes no + in an address
+        body: |
+          Signing up with `qa+1@example.com` and the password {{vars.password}}
+          shows "Enter a valid email address".
+      - level: info
+        body: The dashboard took 3s to show.
+    test: status == 0
+
+  - name: A shopper checks out
+    uses: hello
+    with:
+      notes:
+      - level: warning
+        title: The total updates late
+        body: The total shows the old price for a second after a coupon.
+
+- name: Notes on GitHub
+  id: post
+  needs: [agent]
+  always: true
+  defaults:
+    github-notes:
+      token: "{{vars.token}}"
+      repository: e2e/shop
+      api_url: "{{vars.base}}"
+  steps:
+  - name: Wait for the server
+    uses: http
+    with:
+      url: "{{vars.base}}/repos/e2e/shop/issues/1/comments"
+      method: GET
+      headers:
+        Authorization: "Bearer {{vars.token}}"
+    retry: {max_attempts: 30, interval: 1s}
+    test: res.code == 200
+
+  - name: The notes are put in a comment on the pull request
+    uses: github-notes
+    with:
+      to: comment
+      number: 1
+      body: Notes of the agent.
+      notes: "{{ notes }}"
+    test: |
+      status == 0 && res.posted && res.action in ["created", "updated"] &&
+      res.number == 1 && res.url contains "/issues/1#issuecomment-"
+
+  - name: Only the critical notes, in a comment of their own
+    uses: github-notes
+    with:
+      to: comment
+      number: 1
+      key: critical
+      notes: "{{ filter(notes, .level == 'critical') }}"
+    test: status == 0 && res.posted
+
+  - name: The comments hold the notes, with the secret hidden
+    uses: http
+    with:
+      url: "{{vars.base}}/repos/e2e/shop/issues/1/comments"
+      method: GET
+      headers:
+        Authorization: "Bearer {{vars.token}}"
+    test: |
+      res.code == 200 && len(res.body) == 2 &&
+      res.body[0].body startsWith "<!-- probe-github-notes:probe -->" &&
+      res.body[0].body contains "The run left 3 notes: 1 critical, 1 warning, 1 info." &&
+      res.body[0].body contains "### Agent" &&
+      res.body[0].body contains "**A new user signs up** · passed" &&
+      res.body[0].body contains "**A shopper checks out** · passed" &&
+      res.body[0].body contains "the password &lt;secret:SHOP_PASSWORD&gt;" &&
+      res.body[1].body startsWith "<!-- probe-github-notes:critical -->" &&
+      res.body[1].body contains "The run left 1 note: 1 critical."
+
+  - name: The notes are put in an issue
+    id: issue
+    uses: github-notes
+    with:
+      to: issue
+      title: Notes of the e2e run
+      labels: [probe, e2e]
+      notes: "{{ notes }}"
+    test: status == 0 && res.posted && res.action in ["created", "updated"]
+    outputs:
+      number: res.number
+
+  - name: A run with no notes closes the issue
+    uses: github-notes
+    with:
+      to: issue
+      title: Notes of the e2e run
+      labels: [probe, e2e]
+      notes: []
+    test: status == 0 && res.action == "closed" && res.number == outputs.issue.number
+
+  - name: The issue says there are no notes
+    uses: http
+    with:
+      url: "{{vars.base}}/repos/e2e/shop/issues?state=all&labels=e2e"
+      method: GET
+      headers:
+        Authorization: "Bearer {{vars.token}}"
+    test: |
+      res.code == 200 &&
+      len(filter(res.body, .number == outputs.issue.number && .state == "closed" &&
+        .body contains "The run left no notes." && .title == "Notes of the e2e run")) == 1
+
+  # Outside GitHub Actions there is no summary, and nothing is written. The
+  # token and the repository of the defaults are left alone.
+  - name: The notes are put in the summary of the job
+    uses: github-notes
+    with:
+      to: summary
+      body: "## Notes of the e2e run"
+      notes: "{{ notes }}"
+    test: status == 0 && res.action in ["written", "none"]
