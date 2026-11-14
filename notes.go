@@ -2,26 +2,21 @@ package main
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"unicode/utf8"
-)
 
-// Levels of a note, as Probe gives them in the notes context.
-const (
-	levelInfo     = "info"
-	levelWarning  = "warning"
-	levelCritical = "critical"
+	"github.com/mozership/probe/actionrpc"
+	"github.com/mozership/probe/mask/markdown"
 )
 
 // levels are the levels in the order the summary line counts them.
-var levels = []string{levelCritical, levelWarning, levelInfo}
+var levels = []string{actionrpc.NoteCritical, actionrpc.NoteWarning, actionrpc.NoteInfo}
 
 // alerts are the GitHub alerts a note of each level is shown in.
 var alerts = map[string]string{
-	levelCritical: "CAUTION",
-	levelWarning:  "WARNING",
-	levelInfo:     "NOTE",
+	actionrpc.NoteCritical: "CAUTION",
+	actionrpc.NoteWarning:  "WARNING",
+	actionrpc.NoteInfo:     "NOTE",
 }
 
 // limit is the most a page can hold where it is written, measured as
@@ -43,103 +38,14 @@ var (
 	summaryLimit = limit{max: 1 << 20, size: func(s string) int { return len(s) }, what: "bytes"}
 )
 
-// note is an entry of the notes context of Probe.
-type note struct {
-	job, jobID, step string
-	index            int
-	status           string
-	level            string
-	title, body      string
-	// run is the run of a job with repeat the note is of, or 0.
-	run int
-}
-
 // parseNotes reads with.notes, a list of entries of the notes context.
-func parseNotes(v any) ([]note, error) {
-	list, ok := v.([]any)
-	if !ok {
-		return nil, fmt.Errorf(`with.notes must be a list of notes, such as "{{ notes }}", not %T`, v)
+func parseNotes(v any) ([]actionrpc.Note, error) {
+	notes, err := actionrpc.ParseNotes(v)
+	if err != nil {
+		// The error starts with notes, as notes[1]: body is missing.
+		return nil, fmt.Errorf("with.%w", err)
 	}
-	out := make([]note, 0, len(list))
-	for i, e := range list {
-		m, ok := e.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("with.notes[%d] must be an entry of notes, not %T", i, e)
-		}
-		n, err := parseNote(m)
-		if err != nil {
-			return nil, fmt.Errorf("with.notes[%d]: %w", i, err)
-		}
-		out = append(out, n)
-	}
-	return out, nil
-}
-
-func parseNote(m map[string]any) (note, error) {
-	var n note
-	str := func(key string, required bool) (string, error) {
-		v, ok := m[key]
-		if !ok || v == nil {
-			if required {
-				return "", fmt.Errorf("%s is missing", key)
-			}
-			return "", nil
-		}
-		s, ok := v.(string)
-		if !ok {
-			return "", fmt.Errorf("%s must be a string, not %T", key, v)
-		}
-		return s, nil
-	}
-	var err error
-	if n.level, err = str("level", true); err != nil {
-		return n, err
-	}
-	if _, ok := alerts[n.level]; !ok {
-		return n, fmt.Errorf("level %q is not one of info, warning or critical", n.level)
-	}
-	if n.body, err = str("body", true); err != nil {
-		return n, err
-	}
-	if n.title, err = str("title", false); err != nil {
-		return n, err
-	}
-	if n.job, err = str("job", false); err != nil {
-		return n, err
-	}
-	if n.jobID, err = str("job_id", false); err != nil {
-		return n, err
-	}
-	if n.step, err = str("step", false); err != nil {
-		return n, err
-	}
-	if n.status, err = str("status", false); err != nil {
-		return n, err
-	}
-	if n.index, err = number(m, "index"); err != nil {
-		return n, err
-	}
-	if n.run, err = number(m, "run"); err != nil {
-		return n, err
-	}
-	return n, nil
-}
-
-// number reads a whole number of m, 0 when it is absent.
-func number(m map[string]any, key string) (int, error) {
-	switch v := m[key].(type) {
-	case nil:
-		return 0, nil
-	case int:
-		return v, nil
-	case int64:
-		return int(v), nil
-	case float64:
-		if v == float64(int(v)) {
-			return int(v), nil
-		}
-	}
-	return 0, fmt.Errorf("%s must be a whole number, not %v", key, m[key])
+	return notes, nil
 }
 
 // page is what the action writes: the marker, body, the line counting the
@@ -147,7 +53,7 @@ func number(m map[string]any, key string) (int, error) {
 type page struct {
 	marker string
 	body   string
-	notes  []note
+	notes  []actionrpc.Note
 	// footer is a line after the notes, such as a link to the run.
 	footer string
 }
@@ -222,12 +128,12 @@ func (p page) chunks() []string {
 	var job, step string
 	for i, n := range p.notes {
 		var b strings.Builder
-		if jk := n.jobID + "\x00" + n.job; i == 0 || jk != job {
-			fmt.Fprintf(&b, "\n### %s\n", escapeMasks(orDash(n.job)))
+		if jk := n.JobID + "\x00" + n.Job; i == 0 || jk != job {
+			b.WriteString("\n" + escapeMasks("### "+orDash(n.Job)) + "\n")
 			job, step = jk, ""
 		}
-		if key := fmt.Sprintf("%d\x00%s\x00%d", n.index, n.step, n.run); step == "" || key != step {
-			fmt.Fprintf(&b, "\n**%s** · %s\n", escapeMasks(orDash(n.step)), stepState(n))
+		if key := fmt.Sprintf("%d\x00%s\x00%d", n.Index, n.Step, n.Run); step == "" || key != step {
+			b.WriteString("\n" + escapeMasks("**"+orDash(n.Step)+"** · "+stepState(n)) + "\n")
 			step = key
 		}
 		b.WriteString("\n" + alert(n))
@@ -237,13 +143,13 @@ func (p page) chunks() []string {
 }
 
 // countLine says how many notes there are of each level.
-func countLine(notes []note) string {
+func countLine(notes []actionrpc.Note) string {
 	if len(notes) == 0 {
 		return "The run left no notes."
 	}
 	count := map[string]int{}
 	for _, n := range notes {
-		count[n.level]++
+		count[n.Level]++
 	}
 	var parts []string
 	for _, l := range levels {
@@ -255,22 +161,26 @@ func countLine(notes []note) string {
 }
 
 // stepState is the status of the step of n, with its run.
-func stepState(n note) string {
-	s := orDash(n.status)
-	if n.run > 0 {
-		s += fmt.Sprintf(", run %d", n.run)
+func stepState(n actionrpc.Note) string {
+	s := orDash(n.Status)
+	if n.Run > 0 {
+		s += fmt.Sprintf(", run %d", n.Run)
 	}
 	return s
 }
 
-// alert writes n as a GitHub alert of its level.
-func alert(n note) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "> [!%s]\n", alerts[n.level])
-	if t := strings.TrimSpace(n.title); t != "" {
-		fmt.Fprintf(&b, "> **%s**\n>\n", escapeMasks(strings.Join(strings.Fields(t), " ")))
+// alert writes n as a GitHub alert of its level. What the quote holds is
+// escaped as one text, as GitHub reads it: a body that starts with four
+// spaces is code after a title and a blank line, but goes on the paragraph
+// of the [!NOTE] line when there is no title.
+func alert(n actionrpc.Note) string {
+	inner := "[!" + alerts[n.Level] + "]\n"
+	if t := strings.TrimSpace(n.Title); t != "" {
+		inner += "**" + strings.Join(strings.Fields(t), " ") + "**\n\n"
 	}
-	for line := range strings.SplitSeq(escapeMasks(strings.TrimRight(n.body, "\n")), "\n") {
+	inner += strings.TrimRight(n.Body, "\n")
+	var b strings.Builder
+	for line := range strings.SplitSeq(escapeMasks(inner), "\n") {
 		if line == "" {
 			b.WriteString(">\n")
 			continue
@@ -294,98 +204,11 @@ func plural(n int, one, many string) string {
 	return fmt.Sprintf("%d %s", n, many)
 }
 
-// masks are what Probe writes in place of a value it hides: <secret:NAME>
-// and <redacted>.
-var masks = regexp.MustCompile(`<(secret:[A-Za-z_][A-Za-z0-9_]*|redacted)>`)
-
-// fence opens or closes a fenced code block: three or more backticks or
-// tildes, indented by at most three spaces, and what follows them.
-var fence = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})(.*)$")
-
-// escapeMasks writes the masks in s as text, which GitHub would take for
-// HTML tags and leave out, so that a reader sees where a value was hidden.
-// In a code block or a code span a mask is shown as it is, so it is left
-// alone there.
+// escapeMasks writes the placeholders of the values Probe hides in s,
+// <secret:NAME> and <redacted>, as text, which GitHub would take for HTML
+// tags and leave out, so that a reader sees where a value was hidden. A name
+// is escaped in the line it is written in, as a heading or in bold, rather
+// than by itself, where four spaces before it would make it code.
 func escapeMasks(s string) string {
-	lines := strings.Split(s, "\n")
-	// open is the fence of the code block the line is in, or empty.
-	var open string
-	for i, line := range lines {
-		if m := fence.FindStringSubmatch(line); m != nil {
-			switch {
-			case open == "" && !(m[1][0] == '`' && strings.Contains(m[2], "`")):
-				open = m[1]
-				continue
-			case open != "" && m[1][0] == open[0] && len(m[1]) >= len(open) && strings.TrimSpace(m[2]) == "":
-				open = ""
-				continue
-			}
-		}
-		if open != "" {
-			continue
-		}
-		lines[i] = escapeOutsideSpans(line)
-	}
-	return strings.Join(lines, "\n")
-}
-
-// escapeOutsideSpans escapes the masks of line outside its code spans. A
-// code span opens with a run of backticks that is not escaped by a
-// backslash, and closes with the next run of the same length; a run with no
-// such closer is text.
-func escapeOutsideSpans(line string) string {
-	var b strings.Builder
-	text := 0
-	for i := 0; i < len(line); {
-		if line[i] == '\\' {
-			// A backslash makes the character after it text, so an escaped
-			// backtick opens no code span.
-			i += 2
-			continue
-		}
-		if line[i] != '`' {
-			i++
-			continue
-		}
-		n := ticks(line, i)
-		end := closer(line, i+n, n)
-		if end < 0 {
-			i += n
-			continue
-		}
-		b.WriteString(escape(line[text:i]))
-		b.WriteString(line[i : end+n])
-		i, text = end+n, end+n
-	}
-	b.WriteString(escape(line[text:]))
-	return b.String()
-}
-
-// ticks is the length of the run of backticks at i.
-func ticks(s string, i int) int {
-	n := 0
-	for i+n < len(s) && s[i+n] == '`' {
-		n++
-	}
-	return n
-}
-
-// closer is where the first run of exactly n backticks from i starts, or -1.
-func closer(s string, i, n int) int {
-	for i < len(s) {
-		if s[i] != '`' {
-			i++
-			continue
-		}
-		run := ticks(s, i)
-		if run == n {
-			return i
-		}
-		i += run
-	}
-	return -1
-}
-
-func escape(s string) string {
-	return masks.ReplaceAllString(s, "&lt;$1&gt;")
+	return markdown.Escape(s, markdown.AsEntity)
 }
