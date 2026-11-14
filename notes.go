@@ -129,11 +129,11 @@ func (p page) chunks() []string {
 	for i, n := range p.notes {
 		var b strings.Builder
 		if jk := n.JobID + "\x00" + n.Job; i == 0 || jk != job {
-			fmt.Fprintf(&b, "\n### %s\n", escapeMasks(orDash(n.Job)))
+			b.WriteString("\n" + escapeMasks("### "+orDash(n.Job)) + "\n")
 			job, step = jk, ""
 		}
 		if key := fmt.Sprintf("%d\x00%s\x00%d", n.Index, n.Step, n.Run); step == "" || key != step {
-			fmt.Fprintf(&b, "\n**%s** · %s\n", escapeMasks(orDash(n.Step)), stepState(n))
+			b.WriteString("\n" + escapeMasks("**"+orDash(n.Step)+"** · "+stepState(n)) + "\n")
 			step = key
 		}
 		b.WriteString("\n" + alert(n))
@@ -174,7 +174,7 @@ func alert(n actionrpc.Note) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "> [!%s]\n", alerts[n.Level])
 	if t := strings.TrimSpace(n.Title); t != "" {
-		fmt.Fprintf(&b, "> **%s**\n>\n", escapeMasks(strings.Join(strings.Fields(t), " ")))
+		fmt.Fprintf(&b, "> %s\n>\n", escapeMasks("**"+strings.Join(strings.Fields(t), " ")+"**"))
 	}
 	for line := range strings.SplitSeq(escapeMasks(strings.TrimRight(n.Body, "\n")), "\n") {
 		if line == "" {
@@ -202,7 +202,9 @@ func plural(n int, one, many string) string {
 
 // escapeMasks writes the placeholders of the values Probe hides in s,
 // <secret:NAME> and <redacted>, as text, which GitHub would take for HTML
-// tags and leave out, so that a reader sees where a value was hidden.
+// tags and leave out, so that a reader sees where a value was hidden. A name
+// is escaped in the line it is written in, as a heading or in bold, rather
+// than by itself, where four spaces before it would make it code.
 func escapeMasks(s string) string {
 	return markdown.Escape(s, markdown.AsEntity)
 }

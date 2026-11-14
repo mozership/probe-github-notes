@@ -220,6 +220,22 @@ func TestRenderEscapesMasks(t *testing.T) {
 	}
 }
 
+// TestRenderEscapesMasksInIndentedNames checks that a name escaped by
+// itself would be code, as one of four spaces before it, or a title that
+// opens a fence, is escaped as the heading or the bold text it is shown in.
+func TestRenderEscapesMasksInIndentedNames(t *testing.T) {
+	notes, err := parseNotes([]any{entry("    Job <secret:HOST>", "    Log in as <redacted>", "passed", "info", "``` Token <secret:TOKEN>", "b")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := mustRender(t, page{notes: notes})
+	for _, want := range []string{"###     Job &lt;secret:HOST&gt;", "**    Log in as &lt;redacted&gt;**", "> **``` Token &lt;secret:TOKEN&gt;**"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("render() =\n%s\nwant it to have %q", got, want)
+		}
+	}
+}
+
 func TestRenderEscapesMasksInNames(t *testing.T) {
 	notes, err := parseNotes([]any{entry("Job <secret:HOST>", "Log in as <redacted>", "passed", "info", "Token <secret:TOKEN>", "b")})
 	if err != nil {
