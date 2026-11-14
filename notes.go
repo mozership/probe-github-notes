@@ -169,14 +169,18 @@ func stepState(n actionrpc.Note) string {
 	return s
 }
 
-// alert writes n as a GitHub alert of its level.
+// alert writes n as a GitHub alert of its level. What the quote holds is
+// escaped as one text, as GitHub reads it: a body that starts with four
+// spaces is code after a title and a blank line, but goes on the paragraph
+// of the [!NOTE] line when there is no title.
 func alert(n actionrpc.Note) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "> [!%s]\n", alerts[n.Level])
+	inner := "[!" + alerts[n.Level] + "]\n"
 	if t := strings.TrimSpace(n.Title); t != "" {
-		fmt.Fprintf(&b, "> %s\n>\n", escapeMasks("**"+strings.Join(strings.Fields(t), " ")+"**"))
+		inner += "**" + strings.Join(strings.Fields(t), " ") + "**\n\n"
 	}
-	for line := range strings.SplitSeq(escapeMasks(strings.TrimRight(n.Body, "\n")), "\n") {
+	inner += strings.TrimRight(n.Body, "\n")
+	var b strings.Builder
+	for line := range strings.SplitSeq(escapeMasks(inner), "\n") {
 		if line == "" {
 			b.WriteString(">\n")
 			continue

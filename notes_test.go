@@ -236,6 +236,25 @@ func TestRenderEscapesMasksInIndentedNames(t *testing.T) {
 	}
 }
 
+// TestRenderEscapesMasksInAnIndentedBody checks that a body of four spaces
+// before it is escaped as GitHub reads it in the alert: code after a title,
+// and text on the line of the alert without one.
+func TestRenderEscapesMasksInAnIndentedBody(t *testing.T) {
+	notes, err := parseNotes([]any{
+		entry("J", "S", "passed", "info", "", "    token=<redacted>"),
+		entry("J", "S", "passed", "info", "Title", "    token=<redacted>"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := mustRender(t, page{notes: notes})
+	for _, want := range []string{"> [!NOTE]\n>     token=&lt;redacted&gt;\n", "> **Title**\n>\n>     token=<redacted>\n"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("render() =\n%s\nwant it to have %q", got, want)
+		}
+	}
+}
+
 func TestRenderEscapesMasksInNames(t *testing.T) {
 	notes, err := parseNotes([]any{entry("Job <secret:HOST>", "Log in as <redacted>", "passed", "info", "Token <secret:TOKEN>", "b")})
 	if err != nil {
