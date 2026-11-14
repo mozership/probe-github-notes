@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/mozership/probe/actionrpc"
 )
 
 // mustRender renders p within the limit of a comment.
@@ -68,7 +70,7 @@ The run left 3 notes: 1 critical, 1 warning, 1 info.
 }
 
 func TestRenderNoNotes(t *testing.T) {
-	got := mustRender(t, page{marker: "<!-- m -->", notes: []note{}})
+	got := mustRender(t, page{marker: "<!-- m -->", notes: []actionrpc.Note{}})
 	if got != "<!-- m -->\nThe run left no notes.\n" {
 		t.Errorf("render() = %q", got)
 	}
@@ -196,28 +198,25 @@ func TestParseNotesRefuses(t *testing.T) {
 	}
 }
 
-func TestEscapeMasks(t *testing.T) {
-	for _, tc := range []struct{ in, want string }{
-		{"the password <secret:SHOP_PASSWORD> fails", "the password &lt;secret:SHOP_PASSWORD&gt; fails"},
-		{"Authorization: <redacted>", "Authorization: &lt;redacted&gt;"},
-		{"sent `<secret:TOKEN>` and <secret:TOKEN>", "sent `<secret:TOKEN>` and &lt;secret:TOKEN&gt;"},
-		{"``a ` <redacted>`` <redacted>", "``a ` <redacted>`` &lt;redacted&gt;"},
-		{"```\ntoken=<secret:TOKEN>\n```\n<secret:TOKEN>", "```\ntoken=<secret:TOKEN>\n```\n&lt;secret:TOKEN&gt;"},
-		{"~~~\n```\n<redacted>\n~~~", "~~~\n```\n<redacted>\n~~~"},
-		{"<b>bold</b> and <secret:lower_case1>", "<b>bold</b> and &lt;secret:lower_case1&gt;"},
-		{"an open ` <redacted>", "an open ` &lt;redacted&gt;"},
-		{"` <redacted>`` x", "` &lt;redacted&gt;`` x"},
-		{"``x` <redacted>`` <redacted>", "``x` <redacted>`` &lt;redacted&gt;"},
-		{"````\n```\n<redacted>\n````\n<redacted>", "````\n```\n<redacted>\n````\n&lt;redacted&gt;"},
-		{"```\n<redacted>\n``` not a closer\n<redacted>\n```\n<redacted>", "```\n<redacted>\n``` not a closer\n<redacted>\n```\n&lt;redacted&gt;"},
-		{"``` a`b\n<redacted>", "``` a`b\n&lt;redacted&gt;"},
-		{"\\` <redacted> `", "\\` &lt;redacted&gt; `"},
-		// The escaped backtick is text, and the one after it opens a span.
-		{"\\`` <redacted> `", "\\`` <redacted> `"},
-	} {
-		if got := escapeMasks(tc.in); got != tc.want {
-			t.Errorf("escapeMasks(%q) = %q, want %q", tc.in, got, tc.want)
-		}
+// TestRenderEscapesMasks checks that the placeholders of a body are
+// written as text outside code, and left alone in it, a code span that goes
+// on over the lines of a paragraph among it.
+func TestRenderEscapesMasks(t *testing.T) {
+	notes, err := parseNotes([]any{entry("J", "S", "passed", "info", "", "sent `<secret:TOKEN>` and <secret:TOKEN>\na `span\nwith <redacted>` and <redacted>\n\n```\ntoken=<redacted>\n```")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `> [!NOTE]
+> sent ` + "`<secret:TOKEN>`" + ` and &lt;secret:TOKEN&gt;
+> a ` + "`span" + `
+> with <redacted>` + "`" + ` and &lt;redacted&gt;
+>
+> ` + "```" + `
+> token=<redacted>
+> ` + "```" + `
+`
+	if got := mustRender(t, page{notes: notes}); !strings.Contains(got, want) {
+		t.Errorf("render() =\n%s\nwant it to have\n%s", got, want)
 	}
 }
 

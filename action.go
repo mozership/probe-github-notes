@@ -112,7 +112,7 @@ func (a *Action) RunStep(call actionrpc.Call) (map[string]any, map[string]any, e
 
 type request struct {
 	to         string
-	notes      []note
+	notes      []actionrpc.Note
 	body       string
 	token      string
 	repository string
@@ -480,4 +480,21 @@ func stringList(v any) ([]string, error) {
 		return out, nil
 	}
 	return nil, fmt.Errorf("must be a list of labels, not %T", v)
+}
+
+// number reads a whole number of m, 0 when it is absent.
+func number(m map[string]any, key string) (int, error) {
+	switch v := m[key].(type) {
+	case nil:
+		return 0, nil
+	case int:
+		return v, nil
+	case int64:
+		return int(v), nil
+	case float64:
+		if v == float64(int(v)) {
+			return int(v), nil
+		}
+	}
+	return 0, fmt.Errorf("%s must be a whole number, not %v", key, m[key])
 }
