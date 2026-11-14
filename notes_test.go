@@ -220,6 +220,21 @@ func TestRenderEscapesMasks(t *testing.T) {
 	}
 }
 
+// TestRenderEscapesMasksInTables checks that a placeholder between the
+// backticks of two cells of a table is escaped, as a table cuts its row into
+// cells before reading code spans, and that one in a code span of a cell is
+// left alone.
+func TestRenderEscapesMasksInTables(t *testing.T) {
+	notes, err := parseNotes([]any{entry("J", "S", "passed", "info", "", "| Step | Value |\n|---|---|\n| login | `<secret:TOKEN>` |\n| `x | <redacted> | y` | z |")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "> | login | `<secret:TOKEN>` |\n> | `x | &lt;redacted&gt; | y` | z |\n"
+	if got := mustRender(t, page{notes: notes}); !strings.Contains(got, want) {
+		t.Errorf("render() =\n%s\nwant it to have\n%s", got, want)
+	}
+}
+
 // TestRenderEscapesMasksInIndentedNames checks that a name escaped by
 // itself would be code, as one of four spaces before it, or a title that
 // opens a fence, is escaped as the heading or the bold text it is shown in.
