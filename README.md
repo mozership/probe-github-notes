@@ -4,7 +4,7 @@ A [Probe](https://github.com/mozership/probe) action that puts the notes of a ru
 
 Actions such as [probe-agent](https://github.com/mozership/probe-agent) leave notes for people, besides whether their step passed, and a later step reads them as [`notes`](https://probe.linyo.ws/reference/yaml-configuration#notes), with the job and the step of each and the secrets hidden. Probe does not post them anywhere. This action does, at the time and with the notes the workflow chooses, and nothing else: it is not an action for GitHub at large.
 
-It needs Probe v1.32.0 or later, the first with the `notes` context.
+It is an [external action](https://probe.linyo.ws/guide/concepts/actions#external-actions). Probe downloads it the first time a workflow uses it, and runs the executable whose SHA-256 the `action.yml` at the pinned commit names. It needs Probe v1.32.0 or later, the first with the `notes` context.
 
 ```yaml
 name: Shop
@@ -98,13 +98,13 @@ concurrency:
 | `title` | String | No | `Probe notes` | `issue`: the title |
 | `labels` | Array | No | `[probe]` | `issue`: the labels it has, by which the action finds it again |
 
-The parameters of the other values of `to` are not read, so the [`defaults`](https://probe.linyo.ws/reference/yaml-configuration#defaults) of a job can give `token` to its steps of every kind. A key that is none of these fails the step, and `probe check` reports it with its line.
+The parameters of the other values of `to` are not read, so the [`defaults`](https://probe.linyo.ws/reference/yaml-configuration#defaults) of a job can give `token` to its steps of every kind. A key that is none of these fails the step. Its `action.yml` declares them as `params`, so `probe check` reports such a key with its line.
 
 `notes` is a list of entries as the `notes` context has them; an entry without a `level` of `info`, `warning` or `critical`, or without a `body`, fails the step. Give it the context, or a part of it, as `filter(notes, .level != 'info')`, rather than a list written by hand.
 
 With `to: comment` and no `number`, the action comments on the pull request of the event that started the GitHub Actions run, read from `GITHUB_EVENT_PATH`: a `pull_request` or a `pull_request_target` event. For any other, such as a push to a branch, the step passes without posting, and `res.posted` is false.
 
-The token of a GitHub Actions run, `GITHUB_TOKEN`, needs the permissions to write: `pull-requests: write` for a comment on a pull request, and `issues: write` for an issue or a comment on one. List it under `secrets`, so that Probe hides it in what it prints.
+The token of a GitHub Actions run, `GITHUB_TOKEN`, needs the permissions to write: `pull-requests: write` for a comment on a pull request, and `issues: write` for an issue or a comment on one. List it under [`secrets`](https://probe.linyo.ws/reference/yaml-configuration#secrets), so that Probe hides it in what it prints.
 
 ## What it writes
 
@@ -144,7 +144,7 @@ The last line links to the GitHub Actions run, and is left out outside one. A va
 | `rt` | Duration | How long the step took |
 | `status` | Integer | `0` |
 
-An error of GitHub, such as a 403 for a token that cannot write or a 404 for a pull request that is not there, fails the step with the status and the message of GitHub.
+An error of GitHub, such as a 403 for a token that cannot write or a 404 for a pull request that is not there, fails the step with the status and the message of GitHub. So does a write that GitHub redirects with a 301, a 302 or a 303, which would be sent again as a read.
 
 The action does not return the notes it puts on GitHub as `res.notes`, so that they are not left again for the steps after it.
 
@@ -155,7 +155,7 @@ The action keeps to the guard of the run, and its `action.yml` declares `guard: 
 - Under `--read-only`, `to: comment` and `to: issue` are refused before any request, as they write to GitHub. `to: summary` writes only to the page of the job, and runs.
 - Under `--allow-host`, the host of `api_url`, and of each redirect, must be one the run allows: `api.github.com`, or `api.github.com:443`, for GitHub. A URL without a port is taken at the port of its scheme.
 
-A refused step fails with the kind `refused`.
+A refused step fails with the kind `refused`. See [Guard](https://probe.linyo.ws/guide/concepts/guard).
 
 ## Testing
 
