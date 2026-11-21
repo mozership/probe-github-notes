@@ -47,9 +47,6 @@ var paramsOf = map[string][]string{
 	toSummary: {},
 }
 
-// common are the keys every with.to takes.
-var common = []string{"to", "notes", "body", "timeout"}
-
 // keeps are the kinds of guard the action keeps to, as action.yml declares
 // them: it writes to GitHub only when the run is not read-only, and connects
 // only to a host the run allows.
