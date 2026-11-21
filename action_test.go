@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -49,9 +50,7 @@ func with(ts *httptest.Server, to string, notes []any, more map[string]any) map[
 	if to == toComment {
 		w["number"] = 1
 	}
-	for k, v := range more {
-		w[k] = v
-	}
+	maps.Copy(w, more)
 	return w
 }
 

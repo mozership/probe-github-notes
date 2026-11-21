@@ -96,7 +96,7 @@ func (p page) render(l limit) (string, error) {
 	if total > room {
 		shown = -1
 		used := 0
-		for k := 0; k < len(chunks); k++ {
+		for k := range chunks {
 			if used+l.size(leftOut(len(chunks)-k)) > room {
 				break
 			}
