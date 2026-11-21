@@ -4,9 +4,9 @@ guard: [read-only, allow-host]
 params: [to, notes, body, token, repository, number, title, labels, key, api_url, timeout]
 runs:
   using: binary
-  url: https://github.com/mozership/probe-github-notes/releases/download/v0.1.3/probe-github-notes_{os}_{arch}
+  url: https://github.com/mozership/probe-github-notes/releases/download/v0.1.4/probe-github-notes_{os}_{arch}
   checksums:
-    darwin_amd64: "786419023e0be1c613a6ec3f9fb3488934a7d09ca9a05225c9b25e7be1ccb1ed"
-    darwin_arm64: "d13e178d333719b6212202e24476b9c02660ca8988398b2e7d9c92e5ef84fa68"
-    linux_amd64: "1f254d0be38ca752565c7bc3b184819ddef53572d2d8824880cb8bed6125dad5"
-    linux_arm64: "fb95a4792a7f79a78c9912d6ba8179884b37b7d6678451de15833aa03fa04975"
+    darwin_amd64: "fe3df84705ef3d98c527509cc5b9de17dfe411da08bb00b512bfc28338be1fb8"
+    darwin_arm64: "4a8dc727a9cfd4354c383d8d8585bced87933bfc0ce4941f717e7f3d5ebe4a2b"
+    linux_amd64: "4b2b7a41556c0cde1c7ecec662d78cc4a7377c78c0873891a031dad172af5975"
+    linux_arm64: "80467cfe2c00e3ec4658b0a407907d251db79f2bf97014a312dac7e4e8988292"
