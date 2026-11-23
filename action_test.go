@@ -457,5 +457,16 @@ func TestManifestsDeclare(t *testing.T) {
 		if !slices.Equal(m.Params, params) || !slices.Equal(m.Guard, keeps) {
 			t.Errorf("%s declares params %v and guard %v, want %v and %v", name, m.Params, m.Guard, params, keeps)
 		}
+		// to takes only the kinds of to the action writes to, so that probe
+		// check reports another.
+		to := m.Choices["to"]
+		if len(m.Choices) != 1 || to.IgnoreCase || len(to.Values) != len(paramsOf) {
+			t.Errorf("%s declares choices %v, want to of %v", name, m.Choices, slices.Sorted(maps.Keys(paramsOf)))
+		}
+		for _, v := range to.Values {
+			if _, ok := paramsOf[v]; !ok {
+				t.Errorf("%s declares to %q, which the action does not write to", name, v)
+			}
+		}
 	}
 }
