@@ -12,8 +12,7 @@ import (
 	"testing"
 
 	"github.com/mozership/probe-github-notes/internal/fakegithub"
-	"github.com/mozership/probe/actionref"
-	"github.com/mozership/probe/actionrpc"
+	"github.com/mozership/probe/sdk"
 )
 
 const (
@@ -272,7 +271,7 @@ func TestSummary(t *testing.T) {
 	a := &Action{getenv: func(k string) string {
 		return map[string]string{"GITHUB_STEP_SUMMARY": path, "GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": repo, "GITHUB_RUN_ID": "42", "GITHUB_WORKFLOW": "E2E"}[k]
 	}}
-	ret, _, err := a.RunStep(actionrpc.Call{With: map[string]any{"to": toSummary, "notes": someNotes(), "body": "## Probe"}, Guard: actionrpc.Guard{ReadOnly: true}})
+	ret, _, err := a.RunStep(sdk.Call{With: map[string]any{"to": toSummary, "notes": someNotes(), "body": "## Probe"}, Guard: sdk.Guard{ReadOnly: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,8 +337,8 @@ func TestSummaryOutsideGitHubActions(t *testing.T) {
 func TestReadOnlyRefusesWritingToGitHub(t *testing.T) {
 	for _, to := range []string{toComment, toIssue} {
 		fake, ts, a := gh(t, nil)
-		_, _, err := a.RunStep(actionrpc.Call{With: with(ts, to, someNotes(), nil), Guard: actionrpc.Guard{ReadOnly: true}})
-		if !actionrpc.IsRefused(err) || fake.Requests != 0 {
+		_, _, err := a.RunStep(sdk.Call{With: with(ts, to, someNotes(), nil), Guard: sdk.Guard{ReadOnly: true}})
+		if !sdk.IsRefused(err) || fake.Requests != 0 {
 			t.Errorf("to: %s under read-only: error = %v, %d requests; want it refused before any", to, err, fake.Requests)
 		}
 	}
@@ -349,11 +348,11 @@ func TestAllowHost(t *testing.T) {
 	fake, ts, a := gh(t, nil)
 	u, _ := url.Parse(ts.URL)
 
-	_, _, err := a.RunStep(actionrpc.Call{With: with(ts, toComment, someNotes(), nil), Guard: actionrpc.Guard{AllowHosts: []string{"api.github.com"}}})
-	if !actionrpc.IsRefused(err) || fake.Requests != 0 {
+	_, _, err := a.RunStep(sdk.Call{With: with(ts, toComment, someNotes(), nil), Guard: sdk.Guard{AllowHosts: []string{"api.github.com"}}})
+	if !sdk.IsRefused(err) || fake.Requests != 0 {
 		t.Errorf("error = %v, %d requests; want it refused before any", err, fake.Requests)
 	}
-	if _, _, err := a.RunStep(actionrpc.Call{With: with(ts, toComment, someNotes(), nil), Guard: actionrpc.Guard{AllowHosts: []string{u.Host}}}); err != nil {
+	if _, _, err := a.RunStep(sdk.Call{With: with(ts, toComment, someNotes(), nil), Guard: sdk.Guard{AllowHosts: []string{u.Host}}}); err != nil {
 		t.Errorf("error = %v, want the host of api_url allowed", err)
 	}
 }
@@ -450,7 +449,7 @@ func TestManifestsDeclare(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		m, err := actionref.ParseManifest(data)
+		m, err := sdk.ParseManifest(data)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}

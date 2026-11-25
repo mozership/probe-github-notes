@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/mozership/probe/actionrpc"
+	"github.com/mozership/probe/sdk"
 )
 
 // mustRender renders p within the limit of a comment.
@@ -70,7 +70,7 @@ The run left 3 notes: 1 critical, 1 warning, 1 info.
 }
 
 func TestRenderNoNotes(t *testing.T) {
-	got := mustRender(t, page{marker: "<!-- m -->", notes: []actionrpc.Note{}})
+	got := mustRender(t, page{marker: "<!-- m -->", notes: []sdk.Note{}})
 	if got != "<!-- m -->\nThe run left no notes.\n" {
 		t.Errorf("render() = %q", got)
 	}
