@@ -5,18 +5,18 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/mozership/probe/actionrpc"
-	"github.com/mozership/probe/mask/markdown"
+	"github.com/mozership/probe/sdk"
+	"github.com/mozership/probe/sdk/markdown"
 )
 
 // levels are the levels in the order the summary line counts them.
-var levels = []string{actionrpc.NoteCritical, actionrpc.NoteWarning, actionrpc.NoteInfo}
+var levels = []string{sdk.NoteCritical, sdk.NoteWarning, sdk.NoteInfo}
 
 // alerts are the GitHub alerts a note of each level is shown in.
 var alerts = map[string]string{
-	actionrpc.NoteCritical: "CAUTION",
-	actionrpc.NoteWarning:  "WARNING",
-	actionrpc.NoteInfo:     "NOTE",
+	sdk.NoteCritical: "CAUTION",
+	sdk.NoteWarning:  "WARNING",
+	sdk.NoteInfo:     "NOTE",
 }
 
 // limit is the most a page can hold where it is written, measured as
@@ -39,8 +39,8 @@ var (
 )
 
 // parseNotes reads with.notes, a list of entries of the notes context.
-func parseNotes(v any) ([]actionrpc.Note, error) {
-	notes, err := actionrpc.ParseNotes(v)
+func parseNotes(v any) ([]sdk.Note, error) {
+	notes, err := sdk.ParseNotes(v)
 	if err != nil {
 		// The error starts with notes, as notes[1]: body is missing.
 		return nil, fmt.Errorf("with.%w", err)
@@ -53,7 +53,7 @@ func parseNotes(v any) ([]actionrpc.Note, error) {
 type page struct {
 	marker string
 	body   string
-	notes  []actionrpc.Note
+	notes  []sdk.Note
 	// footer is a line after the notes, such as a link to the run.
 	footer string
 }
@@ -143,7 +143,7 @@ func (p page) chunks() []string {
 }
 
 // countLine says how many notes there are of each level.
-func countLine(notes []actionrpc.Note) string {
+func countLine(notes []sdk.Note) string {
 	if len(notes) == 0 {
 		return "The run left no notes."
 	}
@@ -161,7 +161,7 @@ func countLine(notes []actionrpc.Note) string {
 }
 
 // stepState is the status of the step of n, with its run.
-func stepState(n actionrpc.Note) string {
+func stepState(n sdk.Note) string {
 	s := orDash(n.Status)
 	if n.Run > 0 {
 		s += fmt.Sprintf(", run %d", n.Run)
@@ -173,7 +173,7 @@ func stepState(n actionrpc.Note) string {
 // escaped as one text, as GitHub reads it: a body that starts with four
 // spaces is code after a title and a blank line, but goes on the paragraph
 // of the [!NOTE] line when there is no title.
-func alert(n actionrpc.Note) string {
+func alert(n sdk.Note) string {
 	inner := "[!" + alerts[n.Level] + "]\n"
 	if t := strings.TrimSpace(n.Title); t != "" {
 		inner += "**" + strings.Join(strings.Fields(t), " ") + "**\n\n"

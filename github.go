@@ -12,7 +12,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/mozership/probe/actionrpc"
+	"github.com/mozership/probe/sdk"
 )
 
 // apiVersion is the version of the REST API the action is written against.
@@ -27,7 +27,7 @@ type client struct {
 	http  *http.Client
 	base  *url.URL
 	token string
-	guard actionrpc.Guard
+	guard sdk.Guard
 	// code is the status code of the last response.
 	code int
 }
@@ -209,7 +209,7 @@ func (c *client) do(ctx context.Context, method, path string, payload, out any) 
 
 // checkHost returns a Refused error when the guard does not allow the host
 // of u. A host without a port is taken at the port of its scheme.
-func checkHost(guard actionrpc.Guard, u *url.URL) error {
+func checkHost(guard sdk.Guard, u *url.URL) error {
 	host := u.Host
 	if u.Port() == "" {
 		port := "80"

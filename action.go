@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/mozership/probe/actionrpc"
+	"github.com/mozership/probe/sdk"
 )
 
 // DefaultTimeout bounds a step whose with does not set timeout.
@@ -50,7 +50,7 @@ var paramsOf = map[string][]string{
 // keeps are the kinds of guard the action keeps to, as action.yml declares
 // them: it writes to GitHub only when the run is not read-only, and connects
 // only to a host the run allows.
-var keeps = []string{actionrpc.KindReadOnly, actionrpc.KindAllowHost}
+var keeps = []string{sdk.KindReadOnly, sdk.KindAllowHost}
 
 // keyPattern is what with.key may be, so that it can stand in the marker,
 // an HTML comment.
@@ -67,19 +67,19 @@ type Action struct {
 
 // Run puts the notes in with on GitHub, under no guard.
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
-	ret, _, err := a.RunStep(actionrpc.Call{With: with})
+	ret, _, err := a.RunStep(sdk.Call{With: with})
 	return ret, err
 }
 
 // RunStep puts the notes in call.With on GitHub under the guard of the run.
-func (a *Action) RunStep(call actionrpc.Call) (map[string]any, map[string]any, error) {
+func (a *Action) RunStep(call sdk.Call) (map[string]any, map[string]any, error) {
 	if a.log == nil {
 		a.log = hclog.NewNullLogger()
 	}
 	if a.getenv == nil {
 		a.getenv = os.Getenv
 	}
-	actionrpc.LogParams(a.log, "received request parameters", call.With)
+	sdk.LogParams(a.log, "received request parameters", call.With)
 
 	start := time.Now()
 	req, err := a.parseRequest(call.With)
@@ -87,14 +87,14 @@ func (a *Action) RunStep(call actionrpc.Call) (map[string]any, map[string]any, e
 		return nil, nil, err
 	}
 	if call.Guard.ReadOnly && req.to != toSummary {
-		return nil, nil, actionrpc.Refuse("the run is read-only, and to: %s writes to GitHub; only to: summary writes under it", req.to)
+		return nil, nil, sdk.Refuse("the run is read-only, and to: %s writes to GitHub; only to: summary writes under it", req.to)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), req.timeout)
 	defer cancel()
 	res, err := a.post(ctx, req, call.Guard)
 	if err != nil {
-		actionrpc.LogOutcome(a.log, "posting notes", nil, err)
+		sdk.LogOutcome(a.log, "posting notes", nil, err)
 		return nil, nil, err
 	}
 	ret := map[string]any{
@@ -103,13 +103,13 @@ func (a *Action) RunStep(call actionrpc.Call) (map[string]any, map[string]any, e
 		"rt":     time.Since(start).String(),
 		"status": 0,
 	}
-	actionrpc.LogOutcome(a.log, "posting notes", ret, nil)
+	sdk.LogOutcome(a.log, "posting notes", ret, nil)
 	return ret, nil, nil
 }
 
 type request struct {
 	to         string
-	notes      []actionrpc.Note
+	notes      []sdk.Note
 	body       string
 	token      string
 	repository string
@@ -190,7 +190,7 @@ func (a *Action) parseRequest(with map[string]any) (*request, error) {
 	}
 
 	if v, ok := with["timeout"]; ok {
-		if r.timeout, err = actionrpc.ParseTimeout(v); err != nil {
+		if r.timeout, err = sdk.ParseTimeout(v); err != nil {
 			return nil, fmt.Errorf("with.timeout: %w", err)
 		}
 	}
@@ -293,7 +293,7 @@ func (a *Action) eventNumber() (int, error) {
 	return ev.PullRequest.Number, nil
 }
 
-func (a *Action) post(ctx context.Context, r *request, guard actionrpc.Guard) (result, error) {
+func (a *Action) post(ctx context.Context, r *request, guard sdk.Guard) (result, error) {
 	p := page{body: r.body, notes: r.notes, footer: a.runLink()}
 	if r.to == toSummary {
 		return a.writeSummary(p)
@@ -426,7 +426,7 @@ func workflowName(s string) string {
 
 // httpClient is the client of the action, which follows a redirect only to
 // a host the guard allows.
-func (a *Action) httpClient(guard actionrpc.Guard) *http.Client {
+func (a *Action) httpClient(guard sdk.Guard) *http.Client {
 	c := http.Client{Transport: http.DefaultTransport}
 	if a.client != nil {
 		c = *a.client
