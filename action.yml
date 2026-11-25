@@ -6,9 +6,9 @@ choices:
   to: [comment, summary, issue]
 runs:
   using: binary
-  url: https://github.com/mozership/probe-github-notes/releases/download/v0.1.5/probe-github-notes_{os}_{arch}
+  url: https://github.com/mozership/probe-github-notes/releases/download/v0.1.6/probe-github-notes_{os}_{arch}
   checksums:
-    darwin_amd64: "04cdffcf0933f56f3083815260753bcfec6003972503ed3a5d4cffa798f19d9a"
-    darwin_arm64: "b096cdb0a40276cbd96d95416368a20f5a6b5fe4ca7a9f52ed87fcddd1772f51"
-    linux_amd64: "f0b2a028f3cec5dacf5644283aaebe4347eeb82f747d922e66f459d80d63f89c"
-    linux_arm64: "d347f543ad5a4505fd3b33dc5b977cf7fe1a60f3ba03ccc8fb17eb58ec6083c3"
+    darwin_amd64: "ec8a30938237621fd52ee6e22814dbc8a638fdbcda214050a161d2a14c509b41"
+    darwin_arm64: "edc05eb085931eed821102d06b6b1d8ac5fff4834ba7b2a2ca8e92d4644f3a68"
+    linux_amd64: "8be6ff983e3623975e313f6dd7c1e1db17458e9cd9449f165314a7a92e0dd011"
+    linux_arm64: "e16495ec1f11aa0e73294c258fba7b3eede26ab60e247d2e50c5b471f4e5a624"
